@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+	<flow name="scater_gather_exampleFlow" doc:id="53cc9e57-41eb-4685-a72a-65f0b9e6f45b" >
+		<http:listener doc:name="Listener" doc:id="9689d265-f1ca-40e4-8816-8858eaec33f4" config-ref="HTTP_Listener_config" path="/scatergather">
+			<http:response >
+				<http:body ><![CDATA[#[output application/json
+---
+payload]]]></http:body>
+			</http:response>
+			<http:error-response >
+				<http:body ><![CDATA[#[output application/json
+---
+payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="57911229-b107-4863-8c61-2cbee717dcf1" >
+			<route >
+				<http:request method="GET" doc:name="Request" doc:id="92682dfa-8f25-4abf-b13b-f6bd7b4b7756" url="http://salesforece-database-check.us-e2.cloudhub.io/database"/>
+			</route>
+			<route >
+				<db:select doc:name="Select" doc:id="e062ec59-21cb-4c39-8e56-2d2a3aca415a" config-ref="Database_Config">
+					<db:sql ><![CDATA[select * from account]]></db:sql>
+				</db:select>
+			</route>
+			<route >
+				<http:request method="GET" doc:name="Request" doc:id="754c2327-b7d7-4a28-b352-ebccede6bbe2" url="http://scater-gather-mulesoft.us-e2.cloudhub.io/scatermule" sendBodyMode="ALWAYS"/>
+			</route>
+			<route >
+				<set-payload value='#[{&#10;	"userid" : 4,&#10;	"name" : "satish",&#10;	"city" : "hyd"&#10;}]' doc:name="Set Payload" doc:id="858aea18-2d35-427a-9337-0933d1057f57" />
+				<db:insert doc:name="Insert" doc:id="73553601-0e36-4b2d-84ab-7d5524a8dabd" config-ref="Database_Config">
+					<db:sql ><![CDATA[insert into account values(:userid, :name, :city)]]></db:sql>
+					<db:input-parameters ><![CDATA[#[payload]]]></db:input-parameters>
+				</db:insert>
+			</route>
+		</scatter-gather>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b06afc81-83aa-41a1-b47a-2ed582b000ce" type="ANY">
+				<set-variable value="#[error.errorMessage.payload.results pluck(($$) : ($).payload)]" doc:name="succesroute" doc:id="fb0066c7-5ed0-4be5-b2ca-413881733deb" variableName="successroute"/>
+				<set-variable value="#[error.errorMessage.payload.failures pluck ($$)]" doc:name="errorroute" doc:id="71a4610f-45b9-4da2-a382-b763522a3485" variableName="errorroute"/>
+				<ee:transform doc:name="Transform Message" doc:id="76076d32-9434-4a75-ab65-d4c9ab686a1f" >
+					<ee:message >
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="accumulate" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<foreach doc:name="For Each" doc:id="7b0b1f34-464c-43a2-a526-cd0ed36557fe" collection="#[vars.successroute]">
+					<choice doc:name="Choice" doc:id="22e4a371-c940-4741-808f-ef4db0009d75">
+					<when expression='#[(payload pluck($$))[0] ~= "0"]'>
+						<ee:transform doc:name="Transform Message" doc:id="7da2a610-e5a3-4b64-b285-15b4ed092837">
+							<ee:message>
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{"successroute" : "0",
+	"payload" :
+flatten(payload pluck($))}]]></ee:set-payload>
+
+							</ee:message>
+								<ee:variables >
+								</ee:variables>
+						</ee:transform>
+					</when>
+					<when expression='#[(payload pluck($$))[0] ~= "1"]'>
+						<ee:transform doc:name="Transform Message" doc:id="f6a38d70-3bc4-4660-90f8-a20ee66532aa">
+							<ee:message>
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{"successroute" : "1",
+	"payload" :
+flatten(payload pluck($))}]]></ee:set-payload>
+
+							</ee:message>
+							<ee:variables>
+							</ee:variables>
+						</ee:transform>
+					</when>
+					<when expression='#[(payload pluck($$))[0] ~= "2"]'>
+							<ee:transform doc:name="Transform Message" doc:id="a3b7ad9c-cdeb-4805-b147-1503c1f4df37" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{"successroute" : "2",
+	"payload" :
+flatten(payload pluck($))}]]></ee:set-payload>
+
+								</ee:message>
+								<ee:variables >
+								</ee:variables>
+							</ee:transform>
+						</when>
+						<otherwise>
+						<ee:transform doc:name="Transform Message" doc:id="a2797e75-7aba-4a3d-b5a6-55e08de8e2d5">
+							<ee:message>
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Default"]]></ee:set-payload>
+
+							</ee:message>
+								<ee:variables >
+								</ee:variables>
+						</ee:transform>
+					</otherwise>
+				</choice>
+					<ee:transform doc:name="Transform Message" doc:id="776b6746-591e-484c-99b5-a104267502f6" >
+						<ee:message >
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="accumulate" ><![CDATA[%dw 2.0
+output application/json
+---
+(vars.accumulate ++ [payload])]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+				
+</foreach>
+				<ee:transform doc:name="Transform Message" doc:id="acbbcc39-b473-4997-ae9d-f06b941d9a55" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.accumulate]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+</mule>
